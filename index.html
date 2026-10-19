@@ -282,10 +282,15 @@ td.won{color:var(--ok);font-weight:600}
 </div>
 <div class="toast" id="toast" hidden></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
 <script>
 (() => {
 const $ = id => document.getElementById(id);
 const STORE = 'luckydraw.v1';
+/* Live sync: paste your Firebase web config below (leave null to run offline). */
+const FIREBASE_CONFIG = { apiKey: "AIzaSyAsdQAWWGuBwL16mGoIgLVOfJtxpdxgZ6E", authDomain: "luckydraw-26630.firebaseapp.com", databaseURL: "https://luckydraw-26630-default-rtdb.firebaseio.com", projectId: "luckydraw-26630", appId: "1:484086203038:web:f5e5cbeb0f8ecce49a718f" };
+const ROOM = 'salalah-star-night-2026-k7Qp4xW9mZ2vR8tL';
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* ---------- random ---------- */
@@ -325,6 +330,7 @@ let stats = {rows:0,dup:0,blank:0};
 let busy = false, pendingImport = null, page = 1;
 
 function save(){
+  pushRemote();
   const out = {...S}; if (S.source === 'sample'){ out.headers = []; out.rows = []; }
   try { localStorage.setItem(STORE, JSON.stringify(out)); }
   catch(e){ try { localStorage.setItem(STORE, JSON.stringify({...out, rows:[], headers:[], rowsLost:true})); } catch(_){} }
@@ -520,6 +526,7 @@ function drawOne(){
   const pool = eligible(prize.id); if (!pool.length){ toast('No eligible entries left.'); return; }
   const winner = pool[randInt(pool.length)];
   busy = true; renderChips();
+  sendLive({kind:'one', dur: reduceMotion ? 600 : 4200, pool: samplePool(pool), prize: prize.name, winners: [slim(winner)]});
   roll(pool, reduceMotion ? 600 : 4200, () => {
     record(winner, prize);
     stageShow(winner, true, prize);
@@ -535,6 +542,7 @@ function drawAll(){
   for (let i = 0; i < n; i++){ const j = i + randInt(idx.length - i); [idx[i], idx[j]] = [idx[j], idx[i]]; }
   const picks = idx.slice(0, n).map(i => pool[i]);
   busy = true; renderChips();
+  sendLive({kind:'batch', dur: reduceMotion ? 500 : 2500, pool: samplePool(pool), prize: prize.name, winners: picks.map(slim)});
   roll(pool, reduceMotion ? 500 : 2500, () => {
     picks.forEach(p => record(p, prize));
     $('stageEyebrow').textContent = `${n} winners · ${prize.name}`;
@@ -665,10 +673,84 @@ $('copyWinners').onclick = () => {
   try { navigator.clipboard.writeText(text).then(() => toast(`Copied ${S.winners.length} rows. Paste into Google Sheets.`), fallback); } catch(e){ fallback(); }
 };
 
+/* ---------- live sync (Firebase Realtime Database) ---------- */
+const CLIENT = Math.random().toString(36).slice(2, 10);
+let db = null, lastData = '', lastMeta = '', pendingRemote = null, liveSeen = null;
+const slim = p => ({name:p.name, ticket:p.ticket, contact:p.contact || '', extra:p.extra || ''});
+function samplePool(pool){ const n = Math.min(60, pool.length), out = []; for (let i = 0; i < n; i++) out.push(slim(pool[randInt(pool.length)])); return out; }
+function badge(text, ok){
+  let b = $('syncBadge');
+  if (!b){ b = document.createElement('div'); b.id = 'syncBadge'; b.style.cssText = 'position:fixed;right:10px;bottom:10px;z-index:50;font:600 12px system-ui,sans-serif;padding:5px 10px;border-radius:99px;background:rgba(0,0,0,.75);color:#fff;pointer-events:none'; document.body.appendChild(b); }
+  b.textContent = text; b.style.color = ok ? '#7dff9b' : '#ffd36b';
+}
+function dataPart(){ return JSON.stringify({source:S.source, fileName:S.fileName, headers:S.headers, rows:S.source === 'sample' ? [] : S.rows, map:S.map}); }
+function metaPart(){ return JSON.stringify({prizes:S.prizes, winners:S.winners, allowMulti:S.allowMulti, mask:S.mask, active:S.active, eventName:S.eventName, v:S.v}); }
+function pushRemote(){
+  if (!db) return;
+  const d = dataPart(), m = metaPart();
+  if (d !== lastData){ lastData = d; db.ref('rooms/' + ROOM + '/data').set({by:CLIENT, s:d}); }
+  if (m !== lastMeta){ lastMeta = m; db.ref('rooms/' + ROOM + '/meta').set({by:CLIENT, s:m}); }
+}
+function sendLive(o){ if (db) db.ref('rooms/' + ROOM + '/live').set(Object.assign({by:CLIENT, id:Date.now() + '-' + CLIENT}, o)); }
+function applyRemote(){
+  if (busy){ setTimeout(applyRemote, 400); return; }
+  const r = pendingRemote; pendingRemote = null; if (!r) return;
+  if (r.data){ lastData = r.data; try { Object.assign(S, JSON.parse(r.data)); } catch(e){} }
+  if (r.meta){ lastMeta = r.meta; try { Object.assign(S, JSON.parse(r.meta)); } catch(e){} }
+  if (!S.prizes || !S.prizes.length) S.prizes = [{id:'p1', name:'Grand prize', qty:1}];
+  if (!prizeById(S.active)) S.active = S.prizes[0].id;
+  S.winners = S.winners || [];
+  if (S.source === 'sample'){ S.rows = []; S.headers = []; }
+  derive(); renderAll();
+  try { localStorage.setItem(STORE, JSON.stringify(S.source === 'sample' ? {...S, rows:[], headers:[]} : S)); } catch(e){}
+}
+function queueRemote(k, v){ pendingRemote = pendingRemote || {}; pendingRemote[k] = v; clearTimeout(queueRemote.t); queueRemote.t = setTimeout(applyRemote, 150); }
+function playLive(e){
+  if (busy) return;
+  busy = true; renderChips();
+  roll(e.pool && e.pool.length ? e.pool : [{name:'…', ticket:0}], e.dur || 3000, () => {
+    const w = e.winners || [];
+    if (e.kind === 'batch'){
+      $('stageEyebrow').textContent = w.length + ' winners · ' + e.prize;
+      $('stageName').textContent = e.prize; $('stageName').classList.remove('rolling'); $('stageMeta').textContent = '';
+      $('batchList').innerHTML = w.slice().sort((a,b) => a.ticket - b.ticket).map(p => '<li><span class="mono">' + pad(p.ticket) + '</span><span>' + esc(p.name) + '</span></li>').join('');
+      $('batchList').hidden = false;
+    } else if (w[0]) stageShow(w[0], true, {name:e.prize});
+    busy = false; confetti(); renderChips();
+  });
+}
+function startSync(){
+  if (!FIREBASE_CONFIG){ return; }
+  if (!window.firebase){ badge('○ Offline (sync could not load)', false); return; }
+  firebase.initializeApp(FIREBASE_CONFIG);
+  db = firebase.database();
+  const base = db.ref('rooms/' + ROOM);
+  let first = {data:true, meta:true};
+  db.ref('.info/connected').on('value', s => badge(s.val() ? '● Live sync' : '○ Reconnecting…', !!s.val()));
+  base.child('data').on('value', s => {
+    const v = s.val();
+    if (!v){ first.data = false; if (S.source !== 'sample'){ lastData = ''; pushRemote(); } return; }
+    first.data = false; if (v.s === lastData) return; queueRemote('data', v.s);
+  });
+  base.child('meta').on('value', s => {
+    const v = s.val();
+    if (!v){ first.meta = false; lastMeta = ''; pushRemote(); return; }
+    first.meta = false; if (v.s === lastMeta) return; queueRemote('meta', v.s);
+  });
+  base.child('live').on('value', s => {
+    const v = s.val();
+    if (liveSeen === null){ liveSeen = v ? v.id : ''; return; }
+    if (!v || v.id === liveSeen) return;
+    liveSeen = v.id;
+    if (v.by !== CLIENT) playLive(v);
+  });
+}
+
 /* ---------- boot ---------- */
 load();
 if (S.source === 'sample'){ S.rows = []; S.map = {name:1, key:2, extra:4}; }
 derive(); renderAll();
+startSync();
 })();
 </script>
 </body>
