@@ -43,6 +43,17 @@ h2{font-size:1.15rem}
 
 header.top{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:12px}
 header.top h1{font-size:1.6rem}
+header.top{justify-content:center;text-align:center}
+header.top .brand{justify-content:center;text-align:center}
+.stage .stage-head{display:grid;grid-template-columns:1fr auto 1fr;align-items:center}
+.stage .stage-head .sponsor{justify-content:center;text-align:center}
+.stage .stage-head .hbtns{justify-self:end;flex-direction:column-reverse;align-items:stretch;gap:6px}
+.stage .stage-head .hbtns button{white-space:nowrap}
+.stage .stage-head .sponsor{text-wrap:balance}
+.stage .stage-head.long{grid-template-columns:1fr;justify-items:center;gap:8px}
+.stage .stage-head.long .ev{display:none}
+.stage .stage-head.long .hbtns{justify-self:center;flex-direction:row}
+@media (max-width:700px){.stage .stage-head{grid-template-columns:1fr;justify-items:center;gap:8px}.stage .stage-head .ev{display:none}.stage .stage-head .hbtns{justify-self:center;flex-direction:row}}
 header.top .event{display:flex;gap:8px;align-items:center}
 input,select,textarea,button{font:inherit;color:inherit}
 input[type=text],input[type=number],input[type=search],select,textarea{
@@ -105,7 +116,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .stage:fullscreen .stage-winners h4{font-size:1.5rem}
 .stage:fullscreen .stage-winners .sub{font-size:1.1rem}
 .stage-draw select{background:#000;color:var(--stage-fg);border:1px solid #ffffff40;border-radius:999px;padding:10px 14px}
-@media (max-width:600px){.stage-draw button{font-size:1.05rem;padding:11px 26px}.stage-draw{margin-top:12px}.stage:fullscreen .stage-draw button{font-size:1.1rem;padding:12px 28px}.stage:fullscreen .name{font-size:clamp(2.2rem,11vw,4rem)}.stage:fullscreen .stage-winners li,.stage:fullscreen .stage-winners h4{font-size:1.05rem}.stage:fullscreen .stage-winners .sub{font-size:.85rem}.stage:fullscreen .stage-prizes button{font-size:.95rem;padding:7px 14px}}
+@media (max-width:600px){.stage-draw button{font-size:.95rem;padding:9px 22px;max-width:100%}.stage-draw button:disabled{font-size:.85rem;padding:7px 18px}.stage-draw{margin-top:12px}.stage:fullscreen .stage-draw button{font-size:1.1rem;padding:12px 28px}.stage:fullscreen .name{font-size:clamp(2.2rem,11vw,4rem)}.stage:fullscreen .stage-winners li,.stage:fullscreen .stage-winners h4{font-size:1.05rem}.stage:fullscreen .stage-winners .sub{font-size:.85rem}.stage:fullscreen .stage-prizes button{font-size:.95rem;padding:7px 14px}}
 .stage:fullscreen .stage-draw button{font-size:1.6rem;padding:18px 48px}
 .batch-list{list-style:none;padding:0;margin:8px 0 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px 14px;width:100%;max-width:900px;text-align:left;max-height:40vh;overflow:auto}
 .batch-list.grouped{grid-template-columns:1fr;max-width:640px;gap:8px}
@@ -180,13 +191,9 @@ td.won{color:var(--ok);font-weight:600}
   <header class="top">
     <div class="brand">
       <div>
-        <div class="event-title">Salalah Star Night 2026</div>
+        <div class="event-title" id="brandTitle">Salalah Star Night 2026</div>
         <h1>Lucky Draw</h1>
       </div>
-    </div>
-    <div class="event">
-      <label for="eventName" class="label">Event name</label>
-      <input type="text" id="eventName" value="Lucky Draw 2026">
     </div>
   </header>
 
@@ -200,8 +207,8 @@ td.won{color:var(--ok);font-weight:600}
   <section class="main">
     <div class="stage" id="stage">
       <div class="stage-head">
-        <span class="ev" id="stageEvent">Lucky Draw 2026</span>
-        <span class="sponsor"><b>Salalah Star Night 2026</b></span>
+        <span class="ev"></span>
+        <span class="sponsor"><b id="stageBrand">Salalah Star Night 2026</b></span>
         <span class="hbtns"><button type="button" id="soundBtn">🔊 Sound on</button><button type="button" id="fsBtn">Full screen</button></span>
       </div>
       <div class="stage-body" id="stageBody">
@@ -252,6 +259,12 @@ td.won{color:var(--ok);font-weight:600}
           <label><input type="checkbox" id="multiToggle"> Let one person win more than one prize</label>
         </div>
         <button type="button" class="btn-danger" id="resetWinners">Clear all winners</button>
+      </div>
+
+      <div class="panel">
+        <h2>Event Name</h2>
+        <label for="titleInput" class="label">Shown at the top of the page and on the draw screen</label>
+        <input type="text" id="titleInput" maxlength="60" value="Salalah Star Night 2026">
       </div>
     </aside>
   </section>
@@ -374,7 +387,7 @@ let S = {
   source:'sample', fileName:'', headers:[], rows:[],
   map:{name:1, key:2, extra:4},
   prizes:[{id:'p1',name:'Grand prize',qty:1}], v:2,
-  winners:[], allowMulti:false, mask:true, active:'p1', eventName:'Lucky Draw 2026'
+  winners:[], allowMulti:false, mask:true, active:'p1', eventName:'Lucky Draw 2026', title:'Salalah Star Night 2026'
 };
 let P = [];             // derived participants
 let stats = {rows:0,dup:0,blank:0};
@@ -461,7 +474,7 @@ function eligible(prizeId){
 function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 function renderAll(){
-  $('eventName').value = S.eventName; $('stageEvent').textContent = S.eventName;
+  const ttl = (S.title || '').trim() || 'Salalah Star Night 2026'; $('brandTitle').textContent = ttl; $('stageBrand').textContent = ttl; document.title = ttl; document.querySelector('.stage-head').classList.toggle('long', ttl.length > 24); if (document.activeElement !== $('titleInput')) $('titleInput').value = S.title === undefined ? ttl : S.title; 
   $('maskToggle').checked = S.mask; $('multiToggle').checked = S.allowMulti;
   if (!S.prizes.length) S.prizes = [{id:'p1', name:'Grand prize', qty:1}];
   if (!prizeById(S.active)) S.active = S.prizes[0]?.id;
@@ -480,8 +493,8 @@ function renderChips(){
   $('batchBtn').disabled = busy || bt <= 1;
   $('batchBtn').textContent = bt > 1 ? `Draw all ${bt}` : 'Draw all';
   $('stageDrawBtn').disabled = $('drawBtn').disabled;
-  $('stageDrawBtn').textContent = busy ? 'Drawing…' : !p ? 'Add a prize first' : left <= 0 ? 'All drawn for this prize' : pool === 0 ? 'No eligible entries' : (wonFor(p.id) ? 'Draw next winner' : 'Start lucky draw');
-  $('drawBtn').textContent = !p ? 'Add a prize first' : left <= 0 ? 'All drawn for this prize' : pool === 0 ? 'No eligible entries' : 'Draw winner';
+  $('stageDrawBtn').textContent = busy ? 'Drawing…' : !p ? 'Add a prize first' : left <= 0 ? 'All drawn' : pool === 0 ? 'No eligible entries' : (wonFor(p.id) ? 'Draw next winner' : 'Start lucky draw');
+  $('drawBtn').textContent = !p ? 'Add a prize first' : left <= 0 ? 'All drawn' : pool === 0 ? 'No eligible entries' : 'Draw winner';
 }
 function renderStub(){
   const p = prizeById(S.active);
@@ -708,7 +721,8 @@ $('addPrize').onclick = () => { const id = 'p' + Date.now(); S.prizes.push({id, 
 $('maskToggle').onchange = e => { S.mask = e.target.checked; save(); renderWinners(); renderTable(); };
 $('multiToggle').onchange = e => { S.allowMulti = e.target.checked; save(); refreshAfterDraw(); };
 $('resetWinners').onclick = e => armed(e.currentTarget, () => { S.winners = []; save(); refreshAfterDraw(); resetStage(); toast('All winners cleared.'); });
-$('eventName').oninput = e => { S.eventName = e.target.value; $('stageEvent').textContent = S.eventName; save(); };
+$('titleInput').oninput = e => { S.title = e.target.value; const t = S.title.trim() || 'Salalah Star Night 2026'; $('brandTitle').textContent = t; $('stageBrand').textContent = t; document.title = t; document.querySelector('.stage-head').classList.toggle('long', t.length > 24); save(); };
+
 function soundLabel(){ $('soundBtn').textContent = soundOn ? '🔊 Sound on' : '🔇 Sound off'; }
 $('soundBtn').onclick = () => { soundOn = !soundOn; try { localStorage.setItem('luckydraw.sound', soundOn ? 'on' : 'off'); } catch(e){} audio(); soundLabel(); if (soundOn) beep(660, 0.12, 'triangle', 0.15); };
 soundLabel();
@@ -763,7 +777,7 @@ function badge(text, ok){
   b.textContent = text; b.style.color = ok ? '#7dff9b' : '#ffd36b';
 }
 function dataPart(){ return JSON.stringify({source:S.source, fileName:S.fileName, headers:S.headers, rows:S.source === 'sample' ? [] : S.rows, map:S.map}); }
-function metaPart(){ return JSON.stringify({prizes:S.prizes, winners:S.winners, allowMulti:S.allowMulti, mask:S.mask, active:S.active, eventName:S.eventName, v:S.v}); }
+function metaPart(){ return JSON.stringify({prizes:S.prizes, winners:S.winners, allowMulti:S.allowMulti, mask:S.mask, active:S.active, eventName:S.eventName, title:S.title, v:S.v}); }
 function pushRemote(){
   if (!db) return;
   const d = dataPart(), m = metaPart();
