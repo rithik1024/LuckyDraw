@@ -84,8 +84,8 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .stage-draw button{background:var(--accent);color:var(--accent-ink);border:0;border-radius:999px;font-family:var(--f-display);font-weight:800;font-size:1.25rem;letter-spacing:.03em;padding:14px 36px;box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 22%,transparent)}
 .stage-draw button:hover{filter:brightness(1.08)}
 .stage-draw button:disabled{opacity:.35;box-shadow:none}
-.stage-prizes{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:16px}
-.stage-prizes button{background:transparent;color:var(--stage-fg);border:2px solid #ffffff40;border-radius:999px;font-family:var(--f-display);font-weight:700;font-size:1.05rem;padding:8px 20px;cursor:pointer}
+.stage-prizes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:10px;width:100%;max-width:760px;margin:16px auto 0}
+.stage-prizes button{width:100%;text-align:center;line-height:1.2;background:transparent;color:var(--stage-fg);border:2px solid #ffffff40;border-radius:999px;font-family:var(--f-display);font-weight:700;font-size:1.05rem;padding:8px 20px;cursor:pointer}
 .stage-prizes button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .stage-prizes button.full{opacity:.55}
 .stage-prizes button:disabled{cursor:default}
