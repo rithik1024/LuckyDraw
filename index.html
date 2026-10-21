@@ -69,6 +69,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .stage:fullscreen{border-radius:0;min-height:100vh}
 .stage-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:16px 20px;flex-wrap:wrap}
 .stage-head .ev{font-family:var(--f-display);font-weight:500;font-size:1rem;color:var(--stage-dim);letter-spacing:.02em}
+.hbtns{display:flex;gap:8px;flex-wrap:wrap}
 .stage-head button{background:transparent;border-color:#ffffff30;color:var(--stage-fg);font-size:.8rem;padding:5px 10px}
 .stage-body{display:grid;grid-template-columns:minmax(0,1fr);place-items:center;text-align:center;padding:10px 24px 26px;gap:6px;align-content:center}
 .stage .eyebrow{font-family:var(--f-mono);font-size:.8rem;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
@@ -104,9 +105,11 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .stage:fullscreen .stage-winners h4{font-size:1.5rem}
 .stage:fullscreen .stage-winners .sub{font-size:1.1rem}
 .stage-draw select{background:#000;color:var(--stage-fg);border:1px solid #ffffff40;border-radius:999px;padding:10px 14px}
-@media (max-width:600px){.stage-draw button{font-size:1.05rem;padding:11px 26px}.stage-draw{margin-top:12px}}
+@media (max-width:600px){.stage-draw button{font-size:1.05rem;padding:11px 26px}.stage-draw{margin-top:12px}.stage:fullscreen .stage-draw button{font-size:1.1rem;padding:12px 28px}.stage:fullscreen .name{font-size:clamp(2.2rem,11vw,4rem)}.stage:fullscreen .stage-winners li,.stage:fullscreen .stage-winners h4{font-size:1.05rem}.stage:fullscreen .stage-winners .sub{font-size:.85rem}.stage:fullscreen .stage-prizes button{font-size:.95rem;padding:7px 14px}}
 .stage:fullscreen .stage-draw button{font-size:1.6rem;padding:18px 48px}
 .batch-list{list-style:none;padding:0;margin:8px 0 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px 14px;width:100%;max-width:900px;text-align:left;max-height:40vh;overflow:auto}
+.batch-list.grouped{grid-template-columns:1fr;max-width:640px;gap:8px}
+.batch-list.grouped li{font-size:1.15rem;justify-content:space-between;border-bottom:1px solid #ffffff1f;padding-bottom:6px}
 .batch-list li{font-size:.95rem;display:flex;gap:8px;align-items:baseline;min-width:0}
 .batch-list li span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .batch-list .mono{color:var(--accent);font-size:.8rem}
@@ -199,7 +202,7 @@ td.won{color:var(--ok);font-weight:600}
       <div class="stage-head">
         <span class="ev" id="stageEvent">Lucky Draw 2026</span>
         <span class="sponsor"><b>Salalah Star Night 2026</b></span>
-        <button type="button" id="fsBtn">Full screen</button>
+        <span class="hbtns"><button type="button" id="soundBtn">🔊 Sound on</button><button type="button" id="fsBtn">Full screen</button></span>
       </div>
       <div class="stage-body" id="stageBody">
         <div class="eyebrow" id="stageEyebrow">Ready</div>
@@ -227,7 +230,7 @@ td.won{color:var(--ok);font-weight:600}
         <div class="prize-chips" id="prizeChips" role="group" aria-label="Choose prize"></div>
         <div class="draw-row">
           <button type="button" class="btn-primary" id="drawBtn">Draw winner</button>
-          <button type="button" id="batchBtn" title="Draw every remaining winner for this prize at once">Draw all</button>
+          <button type="button" id="batchBtn" title="Draw the remaining winners for all prizes at once">Draw all</button>
         </div>
         <div class="hint">Shortcut: press <span class="mono">Space</span> to draw. Each pick uses your browser's secure random generator.</div>
       </div>
@@ -314,6 +317,32 @@ const STORE = 'luckydraw.v1';
 const FIREBASE_CONFIG = { apiKey: "AIzaSyAsdQAWWGuBwL16mGoIgLVOfJtxpdxgZ6E", authDomain: "luckydraw-26630.firebaseapp.com", databaseURL: "https://luckydraw-26630-default-rtdb.firebaseio.com", projectId: "luckydraw-26630", appId: "1:484086203038:web:f5e5cbeb0f8ecce49a718f" };
 const ROOM = 'salalah-star-night-2026-k7Qp4xW9mZ2vR8tL';
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const DRAW_MS = 8000, BATCH_MS = 5000;   // how long the names roll before the winner is shown
+
+/* ---------- sound ---------- */
+let audioCtx = null, soundOn = true;
+try { soundOn = localStorage.getItem('luckydraw.sound') !== 'off'; } catch(e){}
+function audio(){
+  try {
+    if (!audioCtx){ const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; audioCtx = new AC(); }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  } catch(e){ return null; }
+}
+function beep(freq, dur, type, vol, delay){
+  const c = audioCtx; if (!c || c.state !== 'running') return;
+  const t = c.currentTime + (delay || 0), o = c.createOscillator(), g = c.createGain();
+  o.type = type || 'sine'; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol || 0.12, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + dur + 0.02);
+}
+function tickSound(prog){ if (soundOn) beep(380 + prog * 520, 0.05, 'square', 0.05); }
+function fanfare(){
+  if (!soundOn) return;
+  [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => beep(f, 0.35, 'triangle', 0.16, i * 0.13));
+  beep(1046.5, 0.9, 'triangle', 0.14, 0.55); beep(1318.5, 0.9, 'triangle', 0.1, 0.55); beep(1568, 0.9, 'sine', 0.08, 0.55);
+}
+['pointerdown','keydown','touchstart'].forEach(ev => document.addEventListener(ev, audio, {passive:true}));
 
 /* ---------- random ---------- */
 function randInt(n){
@@ -447,8 +476,9 @@ function renderChips(){
   $('stagePrizes').hidden = S.prizes.length < 2;
   const p = prizeById(S.active), left = p ? p.qty - wonFor(p.id) : 0, pool = p ? eligible(p.id).length : 0;
   $('drawBtn').disabled = busy || !p || left <= 0 || pool === 0;
-  $('batchBtn').disabled = busy || !p || left <= 1 || pool === 0;
-  $('batchBtn').textContent = left > 1 ? `Draw all ${Math.min(left, pool)}` : 'Draw all';
+  const bt = batchTotal();
+  $('batchBtn').disabled = busy || bt <= 1;
+  $('batchBtn').textContent = bt > 1 ? `Draw all ${bt}` : 'Draw all';
   $('stageDrawBtn').disabled = $('drawBtn').disabled;
   $('stageDrawBtn').textContent = busy ? 'Drawing…' : !p ? 'Add a prize first' : left <= 0 ? 'All drawn for this prize' : pool === 0 ? 'No eligible entries' : (wonFor(p.id) ? 'Draw next winner' : 'Start lucky draw');
   $('drawBtn').textContent = !p ? 'Add a prize first' : left <= 0 ? 'All drawn for this prize' : pool === 0 ? 'No eligible entries' : 'Draw winner';
@@ -534,14 +564,14 @@ function stageShow(p, final, prize){
 function roll(pool, total, onDone){
   const start = performance.now();
   $('stageEyebrow').textContent = 'Drawing…';
-  $('batchList').hidden = true; $('stageActions').innerHTML = '';
+  $('batchList').hidden = true; $('batchList').classList.remove('grouped'); $('stageActions').innerHTML = '';
   (function step(){
     const el = performance.now() - start;
     if (el >= total) return onDone();
     const p = pool[randInt(pool.length)];
     $('stageName').textContent = p.name; $('stageName').classList.add('rolling'); $('stageName').classList.remove('won');
     $('stageMeta').textContent = pad(p.ticket);
-    const prog = el / total;
+    const prog = el / total; tickSound(prog);
     setTimeout(step, 35 + Math.pow(prog, 3) * 420);
   })();
 }
@@ -556,30 +586,44 @@ function drawOne(){
   const pool = eligible(prize.id); if (!pool.length){ toast('No eligible entries left.'); return; }
   const winner = pool[randInt(pool.length)];
   busy = true; renderChips();
-  sendLive({kind:'one', dur: reduceMotion ? 600 : 4200, pool: samplePool(pool), prize: prize.name, winners: [slim(winner)]});
-  roll(pool, reduceMotion ? 600 : 4200, () => {
+  sendLive({kind:'one', dur: reduceMotion ? 600 : DRAW_MS, pool: samplePool(pool), prize: prize.name, winners: [slim(winner)]});
+  roll(pool, reduceMotion ? 600 : DRAW_MS, () => {
     record(winner, prize);
     stageShow(winner, true, prize);
     busy = false; save(); refreshAfterDraw(); confetti();
   });
 }
+function planBatch(){
+  const out = [], taken = new Set();
+  S.prizes.forEach(prize => {
+    const left = prize.qty - wonFor(prize.id); if (left <= 0) return;
+    const pool = eligible(prize.id).filter(p => !taken.has(p.k));
+    const n = Math.min(left, pool.length), idx = pool.map((_, i) => i);
+    for (let i = 0; i < n; i++){
+      const j = i + randInt(idx.length - i); [idx[i], idx[j]] = [idx[j], idx[i]];
+      out.push({prize, p: pool[idx[i]]}); taken.add(pool[idx[i]].k);
+    }
+  });
+  return out;
+}
+function batchTotal(){ return Math.min(S.prizes.reduce((s, p) => s + Math.max(0, p.qty - wonFor(p.id)), 0), P.length - new Set(S.winners.map(w => w.k)).size); }
+function showBatch(items){
+  $('stageEyebrow').textContent = items.length + ' winners';
+  $('stageName').textContent = 'Winners'; $('stageName').classList.remove('rolling','won'); $('stageMeta').textContent = '';
+  $('batchList').classList.add('grouped');
+  $('batchList').innerHTML = items.map(x => '<li><span class="mono">' + esc(x.prizeName) + '</span><span>' + esc(x.name) + ' <span class="mono">' + pad(x.ticket) + '</span></span></li>').join('');
+  $('batchList').hidden = false;
+}
 function drawAll(){
   if (busy) return;
-  const prize = prizeById(S.active); if (!prize) return;
-  const pool = eligible(prize.id), n = Math.min(prize.qty - wonFor(prize.id), pool.length);
-  if (n <= 0) return;
-  const idx = pool.map((_, i) => i);
-  for (let i = 0; i < n; i++){ const j = i + randInt(idx.length - i); [idx[i], idx[j]] = [idx[j], idx[i]]; }
-  const picks = idx.slice(0, n).map(i => pool[i]);
+  const plan = planBatch(); if (!plan.length) return;
+  const pool = eligible(S.active); const poolAll = pool.length ? pool : P;
+  const items = plan.map(x => Object.assign(slim(x.p), {prizeName: x.prize.name}));
   busy = true; renderChips();
-  sendLive({kind:'batch', dur: reduceMotion ? 500 : 2500, pool: samplePool(pool), prize: prize.name, winners: picks.map(slim)});
-  roll(pool, reduceMotion ? 500 : 2500, () => {
-    picks.forEach(p => record(p, prize));
-    $('stageEyebrow').textContent = `${n} winners · ${prize.name}`;
-    $('stageName').textContent = prize.name; $('stageName').classList.remove('rolling');
-    $('stageMeta').textContent = '';
-    $('batchList').innerHTML = picks.sort((a,b) => a.ticket - b.ticket).map(p => `<li><span class="mono">${pad(p.ticket)}</span><span>${esc(p.name)}</span></li>`).join('');
-    $('batchList').hidden = false;
+  sendLive({kind:'batch', dur: reduceMotion ? 500 : BATCH_MS, pool: samplePool(poolAll), prize: '', winners: items});
+  roll(poolAll, reduceMotion ? 500 : BATCH_MS, () => {
+    plan.forEach(x => record(x.p, x.prize));
+    showBatch(items);
     busy = false; save(); refreshAfterDraw(); confetti();
   });
 }
@@ -593,6 +637,7 @@ function markAbsent(at, redraw){
 
 /* ---------- confetti ---------- */
 function confetti(){
+  fanfare();
   if (reduceMotion) return;
   const c = $('confetti'), st = $('stage'), dpr = devicePixelRatio || 1;
   c.width = st.clientWidth * dpr; c.height = st.clientHeight * dpr;
@@ -664,6 +709,9 @@ $('maskToggle').onchange = e => { S.mask = e.target.checked; save(); renderWinne
 $('multiToggle').onchange = e => { S.allowMulti = e.target.checked; save(); refreshAfterDraw(); };
 $('resetWinners').onclick = e => armed(e.currentTarget, () => { S.winners = []; save(); refreshAfterDraw(); resetStage(); toast('All winners cleared.'); });
 $('eventName').oninput = e => { S.eventName = e.target.value; $('stageEvent').textContent = S.eventName; save(); };
+function soundLabel(){ $('soundBtn').textContent = soundOn ? '🔊 Sound on' : '🔇 Sound off'; }
+$('soundBtn').onclick = () => { soundOn = !soundOn; try { localStorage.setItem('luckydraw.sound', soundOn ? 'on' : 'off'); } catch(e){} audio(); soundLabel(); if (soundOn) beep(660, 0.12, 'triangle', 0.15); };
+soundLabel();
 $('fsBtn').onclick = () => {
   const st = $('stage');
   if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
@@ -742,10 +790,7 @@ function playLive(e){
   roll(e.pool && e.pool.length ? e.pool : [{name:'…', ticket:0}], e.dur || 3000, () => {
     const w = e.winners || [];
     if (e.kind === 'batch'){
-      $('stageEyebrow').textContent = w.length + ' winners · ' + e.prize;
-      $('stageName').textContent = e.prize; $('stageName').classList.remove('rolling'); $('stageMeta').textContent = '';
-      $('batchList').innerHTML = w.slice().sort((a,b) => a.ticket - b.ticket).map(p => '<li><span class="mono">' + pad(p.ticket) + '</span><span>' + esc(p.name) + '</span></li>').join('');
-      $('batchList').hidden = false;
+      showBatch(w);
     } else if (w[0]) stageShow(w[0], true, {name:e.prize});
     busy = false; confetti(); renderChips();
   });
