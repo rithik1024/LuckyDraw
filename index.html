@@ -84,6 +84,23 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .stage-draw button{background:var(--accent);color:var(--accent-ink);border:0;border-radius:999px;font-family:var(--f-display);font-weight:800;font-size:1.25rem;letter-spacing:.03em;padding:14px 36px;box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 22%,transparent)}
 .stage-draw button:hover{filter:brightness(1.08)}
 .stage-draw button:disabled{opacity:.35;box-shadow:none}
+.stage-prizes{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:16px}
+.stage-prizes button{background:transparent;color:var(--stage-fg);border:2px solid #ffffff40;border-radius:999px;font-family:var(--f-display);font-weight:700;font-size:1.05rem;padding:8px 20px;cursor:pointer}
+.stage-prizes button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.stage-prizes button.full{opacity:.55}
+.stage-prizes button:disabled{cursor:default}
+.stage:fullscreen .stage-prizes button{font-size:1.6rem;padding:12px 30px}
+.stage-winners{width:100%;max-width:1100px;margin-top:22px;text-align:left;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px 28px}
+.stage-winners h4{margin:0 0 6px;font-family:var(--f-display);font-size:1.05rem;color:var(--accent);letter-spacing:.03em;border-bottom:1px solid #ffffff26;padding-bottom:4px}
+.stage-winners ol{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.stage-winners li{display:flex;gap:10px;align-items:baseline;font-size:1.05rem}
+.stage-winners li.forfeit{opacity:.45;text-decoration:line-through}
+.stage-winners .mono{color:var(--accent);font-size:.85rem}
+.stage-winners .sub{color:var(--stage-dim);font-size:.85rem}
+.stage:fullscreen{overflow-y:auto}
+.stage:fullscreen .stage-winners li{font-size:1.6rem}
+.stage:fullscreen .stage-winners h4{font-size:1.6rem}
+.stage:fullscreen .stage-winners .sub{font-size:1.1rem}
 .stage-draw select{background:#000;color:var(--stage-fg);border:1px solid #ffffff40;border-radius:999px;padding:10px 14px}
 .stage:fullscreen .stage-draw button{font-size:1.6rem;padding:18px 48px}
 .batch-list{list-style:none;padding:0;margin:8px 0 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px 14px;width:100%;max-width:900px;text-align:left;max-height:40vh;overflow:auto}
@@ -187,9 +204,11 @@ td.won{color:var(--ok);font-weight:600}
         <div class="meta" id="stageMeta"></div>
         <ul class="batch-list" id="batchList" hidden></ul>
         <div class="actions" id="stageActions"></div>
+        <div class="stage-prizes" id="stagePrizes" role="group" aria-label="Choose prize"></div>
         <div class="stage-draw">
           <button type="button" id="stageDrawBtn">Start lucky draw</button>
         </div>
+        <div class="stage-winners" id="stageWinners" hidden></div>
       </div>
       <div class="stub">
         <span>Entries in drum <b id="stubPool">0</b></span>
@@ -421,6 +440,8 @@ function renderChips(){
     const w = wonFor(p.id);
     return `<button type="button" class="chip ${w >= p.qty ? 'full' : ''}" aria-pressed="${p.id === S.active}" data-id="${p.id}">${esc(p.name || 'Untitled prize')} <span class="mono">${w}/${p.qty}</span></button>`;
   }).join('');
+  $('stagePrizes').innerHTML = S.prizes.map(p => `<button type="button" class="${wonFor(p.id) >= p.qty ? 'full' : ''}" aria-pressed="${p.id === S.active}" data-id="${p.id}" ${busy ? 'disabled' : ''}>${esc(p.name || 'Untitled prize')} ${wonFor(p.id)}/${p.qty}</button>`).join('');
+  $('stagePrizes').hidden = S.prizes.length < 2;
   const p = prizeById(S.active), left = p ? p.qty - wonFor(p.id) : 0, pool = p ? eligible(p.id).length : 0;
   $('drawBtn').disabled = busy || !p || left <= 0 || pool === 0;
   $('batchBtn').disabled = busy || !p || left <= 1 || pool === 0;
@@ -454,6 +475,12 @@ function renderWinners(){
         ${w.status === 'won' ? `<button type="button" data-absent="${w.at}">Absent</button>` : '<span class="tag no">Absent</span>'}
       </li>`).join('')}</ol></div>`;
   }).join('');
+  const sw = S.prizes.map(p => {
+    const ws = S.winners.filter(w => w.prizeId === p.id);
+    if (!ws.length) return '';
+    return '<div><h4>' + esc(p.name) + '</h4><ol>' + ws.map(w => '<li class="' + (w.status === 'won' ? '' : 'forfeit') + '"><span class="mono">' + pad(w.ticket) + '</span><span><b>' + esc(w.name) + '</b><div class="sub">' + esc(mask(w.contact)) + (w.extra ? ' · ' + esc(w.extra) : '') + '</div></span></li>').join('') + '</ol></div>';
+  }).join('');
+  $('stageWinners').innerHTML = sw; $('stageWinners').hidden = !sw;
   $('winners').innerHTML = groups || '<div class="muted">No winners yet. Pick a prize and press Draw winner.</div>';
 }
 function renderMap(){
@@ -618,6 +645,7 @@ function armed(btn, fn){
 $('drawBtn').onclick = drawOne;
 $('stageDrawBtn').onclick = drawOne;
 $('batchBtn').onclick = drawAll;
+$('stagePrizes').onclick = e => { const b = e.target.closest('[data-id]'); if (!b || busy) return; S.active = b.dataset.id; save(); renderChips(); renderStub(); };
 $('prizeChips').onclick = e => { const b = e.target.closest('[data-id]'); if (!b || busy) return; S.active = b.dataset.id; save(); renderChips(); renderStub(); };
 document.addEventListener('click', e => { const b = e.target.closest('[data-absent]'); if (b && !busy) markAbsent(b.dataset.absent, !!b.dataset.redraw); });
 $('prizeEdit').oninput = e => {
